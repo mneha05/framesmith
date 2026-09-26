@@ -130,6 +130,11 @@ scripts/device_report.sh      adb GPU/device inspection helper
 docs/architecture.svg         rendering architecture
 ```
 
+
+## Arm CPU visibility
+
+The Android overlay also reads Linux/Android auxiliary-vector feature bits from native C++ and reports Arm64 **Neon, SVE, SVE2, SME, and SME2** availability when the current ABI exposes them. This keeps graphics/GPU timing and CPU-vector capability visible in the same on-device diagnostic surface.
+
 ## Hardware boundary
 
 CI proves the APK and Vulkan native code compile and package correctly. Final on-device GPU timings are hardware-dependent and should be measured on an actual Vulkan-capable Android phone rather than fabricated in documentation.
