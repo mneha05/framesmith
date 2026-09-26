@@ -3,6 +3,7 @@
 #include <android/native_window_jni.h>
 
 #include "VulkanEngine.hpp"
+#include "ArmFeatureProbe.hpp"
 
 static VulkanEngine engine;
 
@@ -27,5 +28,11 @@ Java_dev_neha_framesmith_MainActivity_nativeStop(JNIEnv*, jobject) {
 extern "C" JNIEXPORT jstring JNICALL
 Java_dev_neha_framesmith_MainActivity_nativeStats(JNIEnv* env, jobject) {
   const auto text = engine.stats();
+  return env->NewStringUTF(text.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_dev_neha_framesmith_MainActivity_nativeCpuFeatures(JNIEnv* env, jobject) {
+  const auto text = armFeatureSummary();
   return env->NewStringUTF(text.c_str());
 }
