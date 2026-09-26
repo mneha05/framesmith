@@ -1,5 +1,6 @@
 name: CI
 on: [push, pull_request]
+
 jobs:
   host-core:
     runs-on: ubuntu-latest
@@ -7,15 +8,28 @@ jobs:
       - uses: actions/checkout@v4
       - run: g++ -std=c++20 host_test/frame_pacer_test.cpp app/src/main/cpp/FramePacer.cpp -o frame_pacer_test
       - run: ./frame_pacer_test
+
   android-build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: {distribution: temurin, java-version: '17'}
-      - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
         with: {gradle-version: '8.9'}
-      - run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
-      - run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
-      - run: gradle :app:assembleDebug
+      - name: Provision Android SDK/NDK directly
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager             "platforms;android-35"             "build-tools;35.0.0"             "ndk;27.2.12479018"             "cmake;3.22.1"
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+      - name: Build shaders, native Vulkan library, and APK
+        run: gradle :app:assembleDebug --stacktrace
+      - name: Verify compiled SPIR-V is packaged
+        run: |
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | tee /tmp/apk.txt
+          grep -q "assets/shaders/scene.vert.spv" /tmp/apk.txt
+          grep -q "assets/shaders/scene.frag.spv" /tmp/apk.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: framesmith-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
