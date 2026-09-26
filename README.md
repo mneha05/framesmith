@@ -1,47 +1,135 @@
 # FrameSmith
 
-<p align="center"><img src="docs/architecture.svg" width="96%"/></p>
+<p align="center"><img src="docs/architecture.svg" width="96%" /></p>
 
-<p align="center"><img src="docs/frame-pacing.gif" width="92%"/></p>
+<p align="center">
+  <img src="https://img.shields.io/badge/Android-NDK-37D9A5?style=for-the-badge&logo=android" />
+  <img src="https://img.shields.io/badge/Vulkan-1.1-E86FA4?style=for-the-badge&logo=vulkan" />
+  <img src="https://img.shields.io/badge/Kotlin-JNI-6E4BE4?style=for-the-badge&logo=kotlin" />
+  <img src="https://img.shields.io/badge/GPU-timestamps-F0A94B?style=for-the-badge" />
+</p>
 
-**Android NDK + Vulkan rendering and frame-pacing laboratory.**
+**Android NDK + Vulkan renderer with explicit frame pacing and GPU timing.**
 
-FrameSmith is an Android graphics project built around a native Vulkan engine, explicit Android surface ownership, a render thread, swapchain lifecycle hooks, shader sources and a live frame-time overlay. The project intentionally exposes driver-facing Vulkan concepts instead of hiding them behind a game engine.
+FrameSmith is a native Android graphics project that exposes the graphics stack instead of hiding it behind a game engine:
 
-## Stack
+```text
+Kotlin Activity
+    │
+SurfaceView / SurfaceHolder
+    │
+    ▼
+JNI
+    │
+ANativeWindow + AssetManager
+    │
+    ▼
+Vulkan
+  instance
+    ↓
+physical device
+    ↓
+logical device + queues
+    ↓
+Android surface
+    ↓
+swapchain + image views
+    ↓
+render pass + graphics pipeline
+    ↓
+command buffers
+    ↓
+acquire → submit → present
+    ↓
+GPU timestamp query + CPU frame pacer
+```
 
-`Kotlin → SurfaceView → JNI → ANativeWindow → Vulkan instance/device/surface/swapchain → frame pacing overlay`
+## What the renderer actually does
+
+The native engine implements:
+
+- Vulkan instance and physical-device discovery
+- graphics + present queue-family selection
+- Android `VkSurfaceKHR`
+- logical device and `VK_KHR_swapchain`
+- FIFO swapchain creation
+- swapchain image views
+- render pass and framebuffers
+- graphics pipeline
+- GLSL → SPIR-V shader packaging
+- dynamic viewport/scissor
+- command-pool and command-buffer recording
+- `vkAcquireNextImageKHR`
+- semaphore/fence synchronization
+- queue submission
+- `vkQueuePresentKHR`
+- swapchain recreation
+- two frames in flight
+- Vulkan timestamp-query measurement
+- CPU average + p95 frame-time tracking
+- live Android overlay for CPU/GPU frame timing
+
+The rendered scene is intentionally simple: a three-vertex, three-color triangle. The project is about the **driver-facing rendering path and measurement infrastructure**, not scene complexity.
 
 ## Build
 
-Open in Android Studio, install SDK 35 + NDK + CMake, then run on a Vulkan-capable Android device. Vulkan is available through Android's native `libvulkan` on supported devices.
-
 ```bash
-./gradlew :app:assembleDebug
+gradle :app:assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## What the code exercises
+The Android Gradle shader pipeline compiles:
 
-- Vulkan instance and physical-device discovery
-- graphics queue-family selection
-- Android `VkSurfaceKHR` creation
-- logical device + swapchain extension setup
-- swapchain lifecycle boundary
-- GLSL shader assets ready for SPIR-V compilation
-- native render thread
-- frame-time rolling average + p95 jank detector
-- Android lifecycle through `SurfaceHolder.Callback`
-- GPU/device report helper using `adb`
+```text
+app/src/main/shaders/scene.vert
+app/src/main/shaders/scene.frag
+```
 
-## Driver-oriented design
+into packaged SPIR-V assets consumed by the native renderer.
 
-Vulkan moves responsibility such as pipeline reuse and synchronization decisions from the driver into the application. FrameSmith keeps those responsibilities visible so future milestones can add explicit semaphores/fences, image acquisition/presentation, pipeline caches, timestamp queries and validation-layer telemetry without changing the architecture.
+## Frame measurement
 
-## Host CI
+The overlay reports both:
 
-The frame-pacing core compiles as ordinary C++ and is tested on every push. A separate Android GitHub Actions job provisions SDK/NDK/CMake and builds the APK.
+```text
+CPU frame avg
+CPU frame p95
+GPU timestamp duration
+presented frame count
+jank state
+```
 
-## Honest status
+The CPU tracker keeps a rolling 120-frame window. GPU duration comes from Vulkan timestamp queries around the graphics work when supported by the device.
 
-The project currently implements real Vulkan instance/device/surface ownership and the Android NDK/JNI path. The swapchain-render/present loop is the next renderer milestone; the source marks that boundary explicitly rather than pretending a rendered scene exists before it does.
+## CI
+
+The project has two independent validation paths.
+
+**Host core**
+- compiles `FramePacer.cpp` as ordinary C++20
+- validates rolling average, p95, and jank detection
+
+**Android build**
+- provisions Android SDK 35, NDK, and CMake
+- compiles GLSL shaders
+- compiles the native Vulkan library
+- builds the debug APK
+- verifies the SPIR-V shader assets are actually packaged
+- uploads the APK as a workflow artifact
+
+The current Android build is green in GitHub Actions.
+
+## Repository map
+
+```text
+app/src/main/java/            Android lifecycle + live overlay
+app/src/main/cpp/             Vulkan renderer, JNI, frame pacer
+app/src/main/shaders/         GLSL shader sources
+host_test/                    portable frame-pacing tests
+scripts/device_report.sh      adb GPU/device inspection helper
+docs/architecture.svg         rendering architecture
+```
+
+## Hardware boundary
+
+CI proves the APK and Vulkan native code compile and package correctly. Final on-device GPU timings are hardware-dependent and should be measured on an actual Vulkan-capable Android phone rather than fabricated in documentation.
