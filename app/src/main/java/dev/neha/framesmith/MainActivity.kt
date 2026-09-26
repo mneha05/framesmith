@@ -19,6 +19,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     external fun nativeStart(surface: Surface, assets: AssetManager): Boolean
     external fun nativeStop()
     external fun nativeStats(): String
+    external fun nativeCpuFeatures(): String
 
     private lateinit var overlay: TextView
     private var overlayRunning = false
@@ -26,7 +27,7 @@ class MainActivity : Activity(), SurfaceHolder.Callback {
     private val overlayTick = object : Runnable {
         override fun run() {
             if (!overlayRunning) return
-            overlay.text = nativeStats()
+            overlay.text = nativeStats() + "\n" + nativeCpuFeatures()
             overlay.postDelayed(this, 250)
         }
     }
