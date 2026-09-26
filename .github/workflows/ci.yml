@@ -1,0 +1,19 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  host-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: g++ -std=c++20 host_test/frame_pacer_test.cpp app/src/main/cpp/FramePacer.cpp -o frame_pacer_test
+      - run: ./frame_pacer_test
+  android-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+      - run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+      - run: ./gradlew :app:assembleDebug
